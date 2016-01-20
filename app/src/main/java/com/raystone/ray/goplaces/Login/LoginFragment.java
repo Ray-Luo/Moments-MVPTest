@@ -20,7 +20,6 @@ import com.facebook.AccessTokenTracker;
 import com.facebook.CallbackManager;
 import com.facebook.FacebookCallback;
 import com.facebook.FacebookException;
-import com.facebook.FacebookSdk;
 import com.facebook.Profile;
 import com.facebook.login.LoginManager;
 import com.facebook.login.LoginResult;
@@ -35,9 +34,9 @@ import java.io.IOException;
 import java.net.URL;
 
 /**
- * Created by Ray on 11/14/2015.
+ * Created by Ray on 1/14/2016.
  */
-public class LoginFragment extends android.app.Fragment {
+public class LoginFragment extends android.app.Fragment implements LoginContract.View{
 
     //UI reference
     private View mView;
@@ -51,10 +50,11 @@ public class LoginFragment extends android.app.Fragment {
     public static LoginManager mFacebookLoginManager;   //  This will be used to help force log out facebook when return to home.
     //public AccessTokenTracker accessTokenTracker;
     private RecycleThread mRecycleLoadProfilePicThread;
+    private LoginContract.UserActionsListener mActionListener;
     private FacebookCallback<LoginResult> mCallback = new FacebookCallback<LoginResult>() {
         @Override     // This callback tells what to do when successfully logged in/out
         public void onSuccess(LoginResult loginResult) {
-            AccessTokenTracker  accessTokenTracker = new AccessTokenTracker() {   // This is used to detected will one has logged
+            AccessTokenTracker accessTokenTracker = new AccessTokenTracker() {   // This is used to detected will one has logged
                 @Override                                                        // in/out facebook
                 protected void onCurrentAccessTokenChanged(AccessToken oldAccessToken, AccessToken newAccessToken) {
                     updateWithToken(newAccessToken);
@@ -72,20 +72,14 @@ public class LoginFragment extends android.app.Fragment {
         }
     };
 
+
+
+
     public static LoginFragment newInstance()
     {
-        LoginFragment loginFragment = new LoginFragment();
-        return loginFragment;
+        return new LoginFragment();
     }
 
-
-
-    private void load()
-    {
-        FacebookSdk.sdkInitialize(getActivity().getApplicationContext());
-        mCallbackManager = CallbackManager.Factory.create();
-        mFacebookLoginManager = LoginManager.getInstance();
-    }
 
     @Override
     public void onDestroyView()
@@ -101,35 +95,28 @@ public class LoginFragment extends android.app.Fragment {
         mView = null;
         if(mRecycleLoadProfilePicThread != null){
             mRecycleLoadProfilePicThread.exit = false;}
+        mActionListener = null;
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater,ViewGroup container, Bundle savedInstanceState)
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
     {
         super.onCreateView(inflater, container, savedInstanceState);
-        load();
         mView = inflater.inflate(R.layout.login,container,false);
+
+        mActionListener = new LoginPresenter(this);
+
+        mCallbackManager = CallbackManager.Factory.create();
+        mFacebookLoginManager = LoginManager.getInstance();
+
         mEmailView = (AutoCompleteTextView)mView.findViewById(R.id.email);
         mPasswordView = (EditText)mView.findViewById(R.id.password);
         mSignInButton = (Button)mView.findViewById(R.id.sign_in);
+
         mSignInButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(checkValues())  // This will check if the input user name and password meet certain format requirements
-                {   // This is intended to check if the user name and password match with whatever one has registered
-                    SharedPreferences preferences = getActivity().getSharedPreferences("register_data", Context.MODE_PRIVATE);
-                    String email = preferences.getString("email","");
-                    String password = preferences.getString("password","");
-                    if (mEmailView.getText().toString().equals(email) && mPasswordView.getText().toString().equals(password))
-                    {
-                        jumpToMap();
-                        Place.mUserName = email;
-                        Place.mUserProfilePic = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
-                    }else
-                    {
-                        Toast.makeText(getActivity(),"Incorrect user name or password",Toast.LENGTH_SHORT).show();
-                    }
-                }
+                mActionListener.loginWithPassword();
             }
         });
 
@@ -142,10 +129,12 @@ public class LoginFragment extends android.app.Fragment {
 
         //  This leads to the sign up interface.
         mSignUp = (TextView)mView.findViewById(R.id.sign_up);
+
+        //  RED
         mSignUp.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                jumpToRegister();
+                mActionListener.jumpToRegister();
             }
         });
 
@@ -154,7 +143,7 @@ public class LoginFragment extends android.app.Fragment {
         mSkip.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                jumpToMap();
+               mActionListener.jumpToMap();
                 Place.mUserName = "Not Signed In";
                 Place.mUserProfilePic = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
             }
@@ -162,40 +151,87 @@ public class LoginFragment extends android.app.Fragment {
         return mView;
     }
 
+    // This will check if the input user name and password meet certain format requirements and check if the user name
+    // and password match with whatever one has registered
+    @Override
+    public void checkPassword()
+    {
+        boolean isFieldValid = true;
+        mEmailView.setError(null);
+        mPasswordView.setError(null);
+
+        String email = mEmailView.getText().toString();
+        String password = mPasswordView.getText().toString();
+        if(!TextUtils.isEmpty(password) && (password.length()<=8))
+        {
+            mPasswordView.setError("Password is too short");
+            isFieldValid = false;
+        }
+
+        if(TextUtils.isEmpty(email))
+        {
+            mEmailView.setError("This field is required");
+            isFieldValid = false;
+        }
+        else if(!email.contains("@"))
+        {
+            mEmailView.setError("The email format is invalid");
+            isFieldValid = false;
+        }
+        if(isFieldValid)
+        {
+            SharedPreferences preferences = getActivity().getSharedPreferences("register_data", Context.MODE_PRIVATE);
+            email = preferences.getString("email","");
+            password = preferences.getString("password","");
+            if (mEmailView.getText().toString().equals(email) && mPasswordView.getText().toString().equals(password))
+            {
+                mActionListener.jumpToMap();
+                Place.mUserName = email;
+                Place.mUserProfilePic = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+            }else
+            {
+                Toast.makeText(getActivity(),"Incorrect user name or password",Toast.LENGTH_SHORT).show();
+            }
+        }
+
+    }
+
+
     // This is intend to detect whether one has logged in/out with facebook
     private void updateWithToken(AccessToken currentAccessToken) {
         if(getActivity() != null){
-        if (currentAccessToken != null) {
-            // if logged in, it will try to retrieve the profile info from facebook and set the user name and profile picture
-            Profile profile = Profile.getCurrentProfile();
-            if(profile != null) {
-                Place.mUserName = profile.getName();   // set the user name from facebook
-                Place.mUserProfileUri = profile.getProfilePictureUri(72, 72);   // set profile picture from facebook
+            if (currentAccessToken != null) {
+                // if logged in, it will try to retrieve the profile info from facebook and set the user name and profile picture
+                Profile profile = Profile.getCurrentProfile();
+                if(profile != null) {
+                    Place.mUserName = profile.getName();   // set the user name from facebook
+                    Place.mUserProfileUri = profile.getProfilePictureUri(72, 72);   // set profile picture from facebook
 
-                // Starting a new thread to get the picture from facebook http
-                mRecycleLoadProfilePicThread = new RecycleThread() {
-                    @Override
-                    public void run() {
-                        super.run();
-                        while(mRecycleLoadProfilePicThread.exit)
-                        {
-                            try{
-                                URL newURL = new URL(Place.mUserProfileUri.toString());
-                                Place.mUserProfilePic = BitmapFactory.decodeStream(newURL.openConnection().getInputStream());}
-                            catch (IOException e)
-                            {e.printStackTrace();}
+                    // Starting a new thread to get the picture from facebook http
+                    mRecycleLoadProfilePicThread = new RecycleThread() {
+                        @Override
+                        public void run() {
+                            super.run();
+                            while(mRecycleLoadProfilePicThread.exit)
+                            {
+                                try{
+                                    URL newURL = new URL(Place.mUserProfileUri.toString());
+                                    Place.mUserProfilePic = BitmapFactory.decodeStream(newURL.openConnection().getInputStream());}
+                                catch (IOException e)
+                                {e.printStackTrace();}
+                            }
                         }
-                    }
-                };
-                mRecycleLoadProfilePicThread.start();
-                // After the above happened, it will jump to the main app interface
-                jumpToMap();
+                    };
+                    mRecycleLoadProfilePicThread.start();
+                    // After the above happened, it will jump to the main app interface
+                    mActionListener.jumpToMap();
                 }
             }
         }
     }
 
-    public void jumpToMap()
+    @Override
+    public void toMap()
     {
         android.app.FragmentManager fm = getActivity().getFragmentManager();
         android.app.FragmentTransaction trans = fm.beginTransaction();
@@ -210,7 +246,8 @@ public class LoginFragment extends android.app.Fragment {
 
     }
 
-    public void jumpToRegister()
+    @Override
+    public void register()
     {
         android.app.FragmentManager fm = getActivity().getFragmentManager();
         android.app.FragmentTransaction trans = fm.beginTransaction();
@@ -222,50 +259,9 @@ public class LoginFragment extends android.app.Fragment {
         trans.addToBackStack(null);
         trans.commit();
         MoveAmongFragments.currentFragment = "REGISTER";
-
     }
 
-    // This helps to check whether the input user name and email address meet certain requirements
-    private boolean checkValues()
-    {
-        boolean isFieldValid = true;
-        mEmailView.setError(null);
-        mPasswordView.setError(null);
 
-        String email = mEmailView.getText().toString();
-        String password = mPasswordView.getText().toString();
-        if(!TextUtils.isEmpty(password) && !isPasswordValid(password))
-        {
-            mPasswordView.setError("Password is too short");
-            isFieldValid = false;
-            return isFieldValid;
-        }
-
-        if(TextUtils.isEmpty(email))
-        {
-            mEmailView.setError("This field is required");
-            isFieldValid = false;
-            return isFieldValid;
-        }
-        else if(!isEmailValid(email))
-        {
-            mEmailView.setError("The email format is invalid");
-            isFieldValid = false;
-            return isFieldValid;
-        }
-        return isFieldValid;
-
-    }
-
-    private boolean isPasswordValid(String password)
-    {
-        return password.length()>8;
-    }
-
-    private boolean isEmailValid(String email)
-    {
-        return email.contains("@");
-    }
 
 
     // This is mainly intended for what to do after the facebook log in/out process finished and returned to the login interface
@@ -275,5 +271,7 @@ public class LoginFragment extends android.app.Fragment {
         super.onActivityResult(requestCode, resultCode, data);
         mCallbackManager.onActivityResult(requestCode,resultCode,data);
     }
+
+
 
 }

@@ -1,9 +1,12 @@
 package com.raystone.ray.goplaces.Login;
 
+import android.content.Context;
 import android.os.Bundle;
+import android.support.multidex.MultiDex;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
 
+import com.facebook.FacebookSdk;
 import com.raystone.ray.goplaces.Helper.MoveAmongFragments;
 import com.raystone.ray.goplaces.Helper.MyBitMap;
 import com.raystone.ray.goplaces.PlaceDetail.ChoosePicLevel3.PlaceDetailFragment;
@@ -29,6 +32,7 @@ public class LoginActivity extends AppCompatActivity {
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.login_fragment);
+        FacebookSdk.sdkInitialize(this);
         android.app.FragmentManager fm = getFragmentManager();
         android.app.Fragment fragment = fm.findFragmentById(R.id.login_fragment_container);
         if(fragment == null)
@@ -162,7 +166,11 @@ public class LoginActivity extends AppCompatActivity {
 
     }
 
-
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(base);
+        MultiDex.install(this);
+    }
 
 
 }

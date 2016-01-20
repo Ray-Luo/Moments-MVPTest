@@ -22,7 +22,7 @@ import java.util.List;
 /**
  * Created by Ray on 11/24/2015.
  */
-public class ImageBucketLevel1Fragment extends android.app.Fragment {
+public class ImageBucketLevel1Fragment extends android.app.Fragment implements Level1Contract.View{
 
     public static ImageBucketLevel1Fragment newInstance()
     {
@@ -37,6 +37,7 @@ public class ImageBucketLevel1Fragment extends android.app.Fragment {
     private AlbumHelper mAlbumHelper;      //   the album help intended to get every picture holder and pictures in them
     private TextView mQuitPicking;    //  press this will exit picking pictures
     private static final String EXTRA_IMAGE_LIST = "imagelist";
+    private Level1Contract.UserActionsListener mActionListener;
 
 
 
@@ -52,15 +53,24 @@ public class ImageBucketLevel1Fragment extends android.app.Fragment {
         mGridView = null;
         mImageBucketLevel1Adapter = null;
         mView = null;
+        mActionListener = null;
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater,ViewGroup container, Bundle savedInstanceState)
     {
-        initData();
         super.onCreateView(inflater, container, savedInstanceState);
-        mView = inflater.inflate(R.layout.image_bucket_level1,container,false);
+        mActionListener = new Level1Presenter(this);
 
+        //  get all the picture folders and pictures in them, store them in a list of ImageBucket. Each ImageBucket can be regraded as a image folder in which stores info of every image' info
+        mAlbumHelper = AlbumHelper.getHelper();
+        mAlbumHelper.init(getActivity().getApplicationContext());
+        //  get the ImageBucketList which has a list of ImageBucket(Image holder). On the first level, an ImageBucket stores the number of total pictures in that folder, the name of the folder, and a list of all the pictures' info in that folder. On the second level, the list of folder stores info about every single picture in that folder.
+        mDataList = mAlbumHelper.getImagesBucketList(false);
+        //  The default image of every picture folder.
+        mBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.icon_addpic);
+
+        mView = inflater.inflate(R.layout.image_bucket_level1,container,false);
         mQuitPicking = (TextView)mView.findViewById(R.id.quit_picking_1);
         mGridView = (GridView) mView.findViewById(R.id.gridview);
         mImageBucketLevel1Adapter = new ImageBucketLevel1Adapter(getActivity(), mDataList);
@@ -69,7 +79,7 @@ public class ImageBucketLevel1Fragment extends android.app.Fragment {
         mQuitPicking.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                returnToMap();
+                mActionListener.returnToMap();
             }
         });
         mGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -78,18 +88,17 @@ public class ImageBucketLevel1Fragment extends android.app.Fragment {
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 //Intent intent = new Intent(getActivity(), ImageBucketLevel2Activity.class);
                 //  The intent stores a list of info of every picture in the specific folder which has just been clicked. The info includes all the pictures' thumbnail path, source path, an index, and a boolean showing whether this picture has been selected or not.
-                level1ToLevel2(position);
+                mActionListener.level1ToLevel2(position);
                 //intent.putExtra(ImageBucketLevel1Fragment.EXTRA_IMAGE_LIST, (Serializable) mDataList.get(position).imageList);
 
             }
 
         });
-
         return mView;
     }
 
-
-    private void returnToMap()
+    @Override
+    public void toMap()
     {
         android.app.FragmentManager fm = getActivity().getFragmentManager();
         android.app.FragmentTransaction trans = fm.beginTransaction();
@@ -100,7 +109,8 @@ public class ImageBucketLevel1Fragment extends android.app.Fragment {
         MoveAmongFragments.currentFragment = "MAPFRAGMENT";
     }
 
-    public void level1ToLevel2(int position)
+    @Override
+    public void toLevel2(int position)
     {
         android.app.FragmentManager fm = getActivity().getFragmentManager();
         android.app.FragmentTransaction trans = fm.beginTransaction();
@@ -117,19 +127,4 @@ public class ImageBucketLevel1Fragment extends android.app.Fragment {
         trans.commit();
         MoveAmongFragments.currentFragment = "LEVEL2";
     }
-
-    private void initData() {
-        //  get all the picture folders and pictures in them, store them in a list of ImageBucket. Each ImageBucket can be regraded as a image folder in which stores info of every image' info
-        mAlbumHelper = AlbumHelper.getHelper();
-        mAlbumHelper.init(getActivity().getApplicationContext());
-        //  get the ImageBucketList which has a list of ImageBucket(Image holder). On the first level, an ImageBucket stores the number of total pictures in that folder, the name of the folder, and a list of all the pictures' info in that folder. On the second level, the list of folder stores info about every single picture in that folder.
-        mDataList = mAlbumHelper.getImagesBucketList(false);
-        //  The default image of every picture folder.
-        mBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.icon_addpic);
-    }
-
-
-
-
-
 }

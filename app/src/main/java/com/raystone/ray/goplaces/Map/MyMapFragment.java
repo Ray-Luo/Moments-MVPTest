@@ -57,6 +57,7 @@ import java.util.List;
  * Created by Ray on 11/15/2015.
  */
 public class MyMapFragment extends android.app.Fragment implements
+        MapContract.View,
         GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener,
         NavigationView.OnNavigationItemSelectedListener{
@@ -83,24 +84,39 @@ public class MyMapFragment extends android.app.Fragment implements
     private List<LatLng> mMomentsLocation= new ArrayList<>();            //  This is used to store the location of all the moments
     private ImageView mFacebookProfilePic;                               //  This shows the profile pic
     private String TAG = "MyMapFragment";
+    private MapContract.UserActionsListener mActionListener;
 
 
     public static MyMapFragment newInstance()
     {
-        MyMapFragment mapFragment = new MyMapFragment();
-        return mapFragment;
+        return new MyMapFragment();
     }
 
     @Override
-    public void onCreate(Bundle savedInstanceState)
+    public void onDestroyView()
     {
-        super.onCreate(savedInstanceState);
-        load();
+        super.onDestroyView();
+        mGoogleApiClient.disconnect();
+        if(isLocationReceiverRegistered){  // unregister the location receiver
+            getActivity().unregisterReceiver(mLocationReceiver);
+            mLocationService = null;
+            mLocationReceiver = null;
+            isLocationReceiverRegistered = false;
+        }
+        mMap = null;
+        mCurrentActivity = null;
+        mActionListener = null;
     }
 
-    public void load()
+
+    @Override
+    public View onCreateView(final LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
     {
+        super.onCreateView(inflater, container, savedInstanceState);
+
+        //  Some initialization work
         setHasOptionsMenu(true);
+        mActionListener = new MapPresenter(this);
         MoveAmongFragments.editPlace = null;
         MyBitMap.bmp = new ArrayList<>();
         MyBitMap.dir = new ArrayList<>();
@@ -109,21 +125,13 @@ public class MyMapFragment extends android.app.Fragment implements
         mCurrentActivity = getActivity();
         mGoogleApiClient.connect();
         mTotalMoments = Places.get(getActivity()).getPlaces().size();  //  The total number of places(moments) ones has added
-    }
 
-
-
-    @Override
-    public View onCreateView(final LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
-    {
-        super.onCreateView(inflater, container, savedInstanceState);
         if (mView != null) {
             ViewGroup parent = (ViewGroup) mView.getParent();
             mUser.setText(Place.mUserName);
             mFacebookProfilePic.setImageBitmap(Place.mUserProfilePic);
             if (parent != null)
                 parent.removeView(mView);
-            load();
         }
 
         try
@@ -135,9 +143,7 @@ public class MyMapFragment extends android.app.Fragment implements
             searchTextView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    if(searchEditText.getText().toString() !=null && !searchEditText.getText().toString().equals("")){
-                        new LocationTask().execute(searchEditText.getText().toString());
-                    }
+                    mActionListener.searchAddress();
                 }
             });
 
@@ -146,15 +152,7 @@ public class MyMapFragment extends android.app.Fragment implements
             myLocationImageView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    // Use the location service to locate
-                    isLocationReceiverRegistered = true;
-                    mLocationService = new Intent(getActivity(),MyCurrentLocationService.class);
-                    getActivity().startService(mLocationService);
-
-                    //  Add a filter for the receiver
-                    IntentFilter filter = new IntentFilter("com.raystone.ray.goplaces_v1.LOCATION_SERVICE");
-                    mLocationReceiver = new MyMapFragment.LocationReceiver();
-                    getActivity().registerReceiver(mLocationReceiver, filter);
+                    mActionListener.showCurrentLocation();
                 }
             });
 
@@ -184,35 +182,68 @@ public class MyMapFragment extends android.app.Fragment implements
             mPreviousMoment.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    if(mCurrentMoment == -1)     // When first click the "previous", it will take you to the last moment
-                        mCurrentMoment = mMomentsLocation.size();
-                    mCurrentMoment = mCurrentMoment - 1;
-                    if(mCurrentMoment != -1)
-                    {   //  Move the map focus to the current moment and zoom to level 10
-                        LatLng currentLatLng = mMomentsLocation.get(mCurrentMoment);
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 7));
-                        mMap.animateCamera(CameraUpdateFactory.zoomTo(10), 3000, null);
-                    }
+                    mActionListener.showPreviousMoment();
                 }
             });
             mNextMoment.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    if(mCurrentMoment >= mMomentsLocation.size()-1)           // When first click the "next", it will take you to the first moment.
-                        mCurrentMoment = -1;
-                    mCurrentMoment = mCurrentMoment + 1;
-                    LatLng currentLatLng = mMomentsLocation.get(mCurrentMoment);
-                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 7));
-                    mMap.animateCamera(CameraUpdateFactory.zoomTo(10), 3000, null);
+                    mActionListener.showNextMoment();
                 }
             });
         }catch(InflateException e)
         {}
-
         return mView;
     }
 
-    private void showMomentsOnMap()
+    @Override
+    public void executeLocationTask()
+    {
+        if(searchEditText.getText().toString() !=null && !searchEditText.getText().toString().equals("")){
+            new LocationTask().execute(searchEditText.getText().toString());
+        }
+    }
+
+    @Override
+    public void currentLocation()
+    {
+        // Use the location service to locate
+        isLocationReceiverRegistered = true;
+        mLocationService = new Intent(getActivity(),MyCurrentLocationService.class);
+        getActivity().startService(mLocationService);
+        //  Add a filter for the receiver
+        IntentFilter filter = new IntentFilter("com.raystone.ray.goplaces_v1.LOCATION_SERVICE");
+        mLocationReceiver = new MyMapFragment.LocationReceiver();
+        getActivity().registerReceiver(mLocationReceiver, filter);
+    }
+
+    @Override
+    public void previousMoment()
+    {
+        if(mCurrentMoment == -1)     // When first click the "previous", it will take you to the last moment
+            mCurrentMoment = mMomentsLocation.size();
+        mCurrentMoment = mCurrentMoment - 1;
+        if(mCurrentMoment != -1)
+        {   //  Move the map focus to the current moment and zoom to level 10
+            LatLng currentLatLng = mMomentsLocation.get(mCurrentMoment);
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 7));
+            mMap.animateCamera(CameraUpdateFactory.zoomTo(10), 3000, null);
+        }
+    }
+
+    @Override
+    public void nextMoment()
+    {
+        if(mCurrentMoment >= mMomentsLocation.size()-1)           // When first click the "next", it will take you to the first moment.
+            mCurrentMoment = -1;
+        mCurrentMoment = mCurrentMoment + 1;
+        LatLng currentLatLng = mMomentsLocation.get(mCurrentMoment);
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 7));
+        mMap.animateCamera(CameraUpdateFactory.zoomTo(10), 3000, null);
+    }
+
+    @Override
+    public void momentsOnMap()
     {   //  When click "View Moments on Map" in the DrawerLayout, the "previous moment" and "next moment" will appear. It will also add markers on map if its corresponding LatLng is known. The marker are indexed so it will help to retrieve their corresponding moments.
         mPreviousMoment.setVisibility(View.VISIBLE);
         mNextMoment.setVisibility(View.VISIBLE);
@@ -234,7 +265,7 @@ public class MyMapFragment extends android.app.Fragment implements
                 if(marker.getTitle().equals("Current Location"))
                 {   // When click on the "current location" marker, it will prompt to add a new place(moment)
                     MoveAmongFragments.addPlaceMode  = true;
-                    mapToDetail();
+                    mActionListener.mapToDetail();
                 }else{  // When click on other markers, it will jump to their corresponding place(moment) detail page where one can edit and save the place(moment).
                     MoveAmongFragments.markerToDetail = true;
                     MoveAmongFragments.editPlaceMode = true;
@@ -261,7 +292,8 @@ public class MyMapFragment extends android.app.Fragment implements
         MoveAmongFragments.currentFragment = "EDITPLACE";
     }
 
-    private void mapToDetail()
+    @Override
+    public void toDetail()
     {
         android.app.FragmentManager fm = getActivity().getFragmentManager();
         android.app.FragmentTransaction trans = fm.beginTransaction();
@@ -275,7 +307,8 @@ public class MyMapFragment extends android.app.Fragment implements
         MoveAmongFragments.currentFragment = "PLACEDETAIL";
     }
 
-    private void mapToList()
+    @Override
+    public void toList()
     {
         android.app.FragmentManager fm = getActivity().getFragmentManager();
         android.app.FragmentTransaction trans = fm.beginTransaction();
@@ -290,24 +323,6 @@ public class MyMapFragment extends android.app.Fragment implements
     }
 
     @Override
-    public void onDestroyView()
-    {
-        super.onDestroyView();
-        mMap = null;
-        mGoogleApiClient.disconnect();
-        if(isLocationReceiverRegistered){  // unregister the location receiver
-            getActivity().unregisterReceiver(mLocationReceiver);
-            mLocationService = null;
-            mLocationReceiver = null;
-            isLocationReceiverRegistered = false;
-        }
-        mCurrentActivity = null;
-
-    }
-
-
-
-    @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         inflater.inflate(R.menu.navigation, menu);
         super.onCreateOptionsMenu(menu, inflater);
@@ -317,17 +332,15 @@ public class MyMapFragment extends android.app.Fragment implements
     public boolean onNavigationItemSelected(MenuItem item) {
         // Handle navigation view item clicks here.
         int id = item.getItemId();
-
         if (id == R.id.add_moments) {  // Add a new place
             MoveAmongFragments.addPlaceMode  = true;
-            mapToDetail();
+            mActionListener.mapToDetail();
         } else if (id == R.id.view_list) {  // View places on list
-            mapToList();
+            mActionListener.mapToList();
         } else if (id == R.id.map_show) {   // View places on map
-            showMomentsOnMap();
+            mActionListener.showMomentsOnMap();
             MoveAmongFragments.markerToDetail = true;
         }
-
         DrawerLayout drawer = (DrawerLayout) mView .findViewById(R.id.drawer_layout);
         drawer.closeDrawer(GravityCompat.START);
         return true;
@@ -348,7 +361,7 @@ public class MyMapFragment extends android.app.Fragment implements
         mMap.setMyLocationEnabled(false);
         mMap.getUiSettings().setZoomControlsEnabled(true);
         if(MoveAmongFragments.markerToDetail){
-            showMomentsOnMap();}
+            mActionListener.showMomentsOnMap();}
     }
 
 
@@ -375,14 +388,18 @@ public class MyMapFragment extends android.app.Fragment implements
         {   // when the current location has been located, it will move focus to that place
             mLatitude = intent.getDoubleExtra("Latitude",0);
             mLongitude = intent.getDoubleExtra("Longitude",0);
-            updateUI();
+            LatLng old = new LatLng(mLatitude, mLongitude);
+            mMap.addMarker(new MarkerOptions().position(old).title("Current Location"));
+            mMap.moveCamera(CameraUpdateFactory.newLatLng(old));
+            mCurrentActivity.stopService(mLocationService);
             abortBroadcast();
         }
     }
 
     // different OS will have to use different ways to get MapFragment
-    private MapFragment getMapFragment() {
-        FragmentManager fm = null;
+    @Override
+    public MapFragment getMapFragment() {
+        FragmentManager fm;
         Log.d(TAG, "sdk: " + Build.VERSION.SDK_INT);
         Log.d(TAG, "release: " + Build.VERSION.RELEASE);
 
@@ -397,14 +414,7 @@ public class MyMapFragment extends android.app.Fragment implements
         return (MapFragment) fm.findFragmentById(R.id.map);
     }
 
-    private static void updateUI()
-    {
-        LatLng old = new LatLng(mLatitude, mLongitude);
-        mMap.addMarker(new MarkerOptions().position(old).title("Current Location"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(old));
-        mCurrentActivity.stopService(mLocationService);
 
-    }
 
     //  This AsyncTask is used to get the location when search the address in the search bar
     public class LocationTask extends AsyncTask<String, Void, List<Address>> {

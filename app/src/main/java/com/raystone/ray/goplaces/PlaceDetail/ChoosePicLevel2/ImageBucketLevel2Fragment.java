@@ -27,19 +27,20 @@ import java.util.List;
 /**
  * Created by Ray on 11/24/2015.
  */
-public class ImageBucketLevel2Fragment extends android.app.Fragment {
+public class ImageBucketLevel2Fragment extends android.app.Fragment implements Level2Contract.View{
 
 
     public static ImageBucketLevel2Fragment newInstance()
     {return new ImageBucketLevel2Fragment();}
 
     private View mView;
-    public static final String EXTRA_IMAGE_LIST = "imagelist";             //  an identifier to receive contents from the ImageBucketLevel1Fragment
-    public List<ImageItem> mDataList;                                         //  This will be the list of all the pictures' info received from the ImageBucketLevel1Fragment
-    public GridView mGridView;                                                //  GridView for showing images in a picture folder
-    public ImageBucketLevel2Adapter mImageBucketLevel2Adapter;              //  The adapter of the GridView
-    public TextView mQuitPicking2;                                           //  press this will quit picking images
-    public Button mFinishPickingButton;                                     //  press this button will finish picking images
+    private static final String EXTRA_IMAGE_LIST = "imagelist";             //  an identifier to receive contents from the ImageBucketLevel1Fragment
+    private List<ImageItem> mDataList;                                         //  This will be the list of all the pictures' info received from the ImageBucketLevel1Fragment
+    private GridView mGridView;                                                //  GridView for showing images in a picture folder
+    private ImageBucketLevel2Adapter mImageBucketLevel2Adapter;              //  The adapter of the GridView
+    private TextView mQuitPicking2;                                           //  press this will quit picking images
+    private Button mFinishPickingButton;                                     //  press this button will finish picking images
+    private Level2Contract.UserActionsListener mActionListener;
 
     Handler mHandler = new Handler() {
         @Override
@@ -63,11 +64,13 @@ public class ImageBucketLevel2Fragment extends android.app.Fragment {
         mImageBucketLevel2Adapter = null;
         mHandler = null;
         mView = null;
+        mActionListener = null;
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         super.onCreateView(inflater, container, savedInstanceState);
+        mActionListener = new Level2Presenter(this);
         mView = inflater.inflate(R.layout.image_bucket_level2, container, false);
 
 
@@ -83,7 +86,7 @@ public class ImageBucketLevel2Fragment extends android.app.Fragment {
         //  This is intended to dynamically show how many pictures have been selected
         mImageBucketLevel2Adapter.setTextCallback(new ImageBucketLevel2Adapter.TextCallback() {
             public void onListen(int count) {
-                mFinishPickingButton.setText("Finish" + "(" + count + ")");
+                mActionListener.numberOfSelectedPictures(count);
             }
         });
         mGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -99,7 +102,7 @@ public class ImageBucketLevel2Fragment extends android.app.Fragment {
         mQuitPicking2.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                returnToMap();
+                mActionListener.returnToMap();
             }
         });
 
@@ -109,27 +112,8 @@ public class ImageBucketLevel2Fragment extends android.app.Fragment {
         mFinishPickingButton = (Button)mView.findViewById(R.id.bt);
         mFinishPickingButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                ArrayList<String> list = new ArrayList<String>();
-                Collection<String> c = mImageBucketLevel2Adapter.map.values();
-                Iterator<String> it = c.iterator();
-                for (; it.hasNext(); ) {
-                    list.add(it.next());
-                }
-
-                if (MyBitMap.act_bool) {
-                    if (!MoveAmongFragments.editPlaceMode) {
-                        level2ToDetail();
-                    } else {
-                        level2ToEditDetail();
-                    }
-                }
-                for (int i = 0; i < list.size(); i++) {
-                    if (MyBitMap.dir.size() < 6) {
-                        MyBitMap.dir.add(list.get(i));
-                    }
-                }
+                mActionListener.finishPickingPictures();
             }
-
         });
         return mView;
     }
@@ -146,7 +130,8 @@ public class ImageBucketLevel2Fragment extends android.app.Fragment {
         }
     }
 
-    private void returnToMap()
+    @Override
+    public void toMap()
     {
         popLevel2();
         android.app.FragmentManager fm = getActivity().getFragmentManager();
@@ -158,7 +143,8 @@ public class ImageBucketLevel2Fragment extends android.app.Fragment {
         MoveAmongFragments.currentFragment = "MAPFRAGMENT";
     }
 
-    private void level2ToDetail()
+    @Override
+    public void toDetail()
     {
         popLevel2();
         android.app.FragmentManager fm = getActivity().getFragmentManager();
@@ -170,7 +156,38 @@ public class ImageBucketLevel2Fragment extends android.app.Fragment {
         MoveAmongFragments.currentFragment = "PLACEDETAIL";
     }
 
-    private void level2ToEditDetail()
+    @Override
+    public void showNumber(int count)
+    {
+        mFinishPickingButton.setText("Finish" + "(" + count + ")");
+    }
+
+    @Override
+    public void finishPicking()
+    {
+        ArrayList<String> list = new ArrayList<String>();
+        Collection<String> c = mImageBucketLevel2Adapter.map.values();
+        Iterator<String> it = c.iterator();
+        for (; it.hasNext(); ) {
+            list.add(it.next());
+        }
+
+        if (MyBitMap.act_bool) {
+            if (!MoveAmongFragments.editPlaceMode) {
+                mActionListener.level2ToDetail();
+            } else {
+                mActionListener.level2ToEditDetail();
+            }
+        }
+        for (int i = 0; i < list.size(); i++) {
+            if (MyBitMap.dir.size() < 6) {
+                MyBitMap.dir.add(list.get(i));
+            }
+        }
+    }
+
+    @Override
+    public void toEditDetail()
     {
         popLevel2();
         android.app.FragmentManager fm = getActivity().getFragmentManager();

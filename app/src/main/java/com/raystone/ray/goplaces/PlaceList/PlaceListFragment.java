@@ -20,6 +20,8 @@ import android.widget.TextView;
 import com.raystone.ray.goplaces.Helper.MoveAmongFragments;
 import com.raystone.ray.goplaces.Helper.MyBitMap;
 import com.raystone.ray.goplaces.Helper.Place;
+import com.raystone.ray.goplaces.PlaceDetail.ChoosePicLevel3.PlaceDetailContract;
+import com.raystone.ray.goplaces.PlaceDetail.ChoosePicLevel3.PlaceDetailPresenter;
 import com.raystone.ray.goplaces.PlaceDetail.ChoosePicLevel4.ViewPicPagerFragment;
 import com.raystone.ray.goplaces.PlaceDetail.EditPlace.EditPlaceFragment;
 import com.raystone.ray.goplaces.R;
@@ -32,7 +34,7 @@ import java.util.Objects;
 /**
  * Created by Ray on 12/2/2015.
  */
-public class PlaceListFragment extends android.app.Fragment {
+public class PlaceListFragment extends android.app.Fragment implements PlaceListContract.View{
 
     private View mView;
     private RecyclerView mPlaceRecycleView;
@@ -41,6 +43,7 @@ public class PlaceListFragment extends android.app.Fragment {
     private int numberOfPics;
     private Places allPlaces;
     private List<Place> places;
+    private PlaceListContract.UserActionsListener mActionListener;
 
 
 
@@ -51,13 +54,6 @@ public class PlaceListFragment extends android.app.Fragment {
 
 
 
-    private void load()
-    {
-        MoveAmongFragments.editPlace = null;
-        MyBitMap.bmp = new ArrayList<>();
-        MyBitMap.dir = new ArrayList<>();
-        MyBitMap.max = 0;
-    }
 
     @Override
     public void onDestroyView()
@@ -67,6 +63,7 @@ public class PlaceListFragment extends android.app.Fragment {
         places = null;
         mPlaceAdapter = null;
         mView = null;
+        mActionListener = null;
     }
 
     @Override
@@ -74,15 +71,19 @@ public class PlaceListFragment extends android.app.Fragment {
     {
         super.onCreateView(inflater, container, savedInstanceState);
         mView = inflater.inflate(R.layout.place_item_list,container,false);
-        load();
+        mActionListener = new PlaceListPresenter(this);
+        MoveAmongFragments.editPlace = null;
+        MyBitMap.bmp = new ArrayList<>();
+        MyBitMap.dir = new ArrayList<>();
+        MyBitMap.max = 0;
         mPlaceRecycleView = (RecyclerView) mView.findViewById(R.id.place_recycle_view);
         mPlaceRecycleView.setLayoutManager(new LinearLayoutManager(getActivity()));
-        updateUI();
+        mActionListener.updateUI();
         return mView;
     }
 
-
-    public void updateUI()
+    @Override
+    public void update()
     {
         //  Get all the Places and put them in the RecycleView's adapter
         allPlaces = Places.get(getActivity());
@@ -90,7 +91,7 @@ public class PlaceListFragment extends android.app.Fragment {
 
         if (mPlaceAdapter == null)
         {
-            mPlaceAdapter = new PlaceAdapter(places);
+            mPlaceAdapter = new PlaceAdapter(places,mPlaceListener);
             mPlaceRecycleView.setAdapter(mPlaceAdapter);
         }else
         {
@@ -170,14 +171,13 @@ public class PlaceListFragment extends android.app.Fragment {
         public void onClick(View view)
         {
             MoveAmongFragments.editPlace = mPlace;
-            MoveAmongFragments.STATE = "LISTFROMPLACE";
-            MoveAmongFragments.editPlaceMode = true;
-            listToEdit();
+            mPlaceListener.onPlaceClick(mPlace);
         }
 
     }
 
-    private void listToEdit()
+    @Override
+    public void toEdit()
     {
         android.app.FragmentManager fm = getActivity().getFragmentManager();
         android.app.FragmentTransaction trans = fm.beginTransaction();
@@ -208,13 +208,21 @@ public class PlaceListFragment extends android.app.Fragment {
         MoveAmongFragments.currentFragment = "VIEWPICS";
     }
 
+    PlaceItemListener mPlaceListener = new PlaceItemListener() {
+        @Override
+        public void onPlaceClick(Place clickedNote) {
+            mActionListener.listToEdit();
+        }
+    };
+
     private class PlaceAdapter extends RecyclerView.Adapter<PlaceHolder>
     {
         private List<Place> mPlaces;
 
-        public PlaceAdapter(List<Place> places)
+        public PlaceAdapter(List<Place> places, PlaceItemListener listener)
         {
             mPlaces = places;
+            mPlaceListener = listener;
         }
 
         @Override
@@ -259,13 +267,10 @@ public class PlaceListFragment extends android.app.Fragment {
         return list;
     }
 
-
-
     @SuppressLint("HandleLeak")
     public class PlaceDetailAdapter extends BaseAdapter {
 
         private Context mContext;
-        private int currentPosition = -1;
         private List<Bitmap> bitmapList = getPics(mPlaceGridView);
 
 
@@ -314,6 +319,11 @@ public class PlaceListFragment extends android.app.Fragment {
         public class ViewHolder
         {public ImageView image;}
 
+    }
+
+    public interface PlaceItemListener
+    {
+        void onPlaceClick(Place clickedPlace);
     }
 
 }
