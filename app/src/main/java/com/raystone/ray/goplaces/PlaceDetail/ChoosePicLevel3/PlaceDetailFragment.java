@@ -221,7 +221,7 @@ public class PlaceDetailFragment extends android.app.Fragment implements PlaceDe
         }
     }
 
-    public class ViewHolder
+    public static class ViewHolder
     {public ImageView image;}
 
 
