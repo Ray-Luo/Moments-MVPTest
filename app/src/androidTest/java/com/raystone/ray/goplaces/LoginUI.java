@@ -3,12 +3,15 @@ package com.raystone.ray.goplaces;
 import android.support.annotation.IdRes;
 import android.support.test.espresso.Espresso;
 
+import android.support.test.espresso.UiController;
+import android.support.test.espresso.ViewAction;
 import android.support.test.espresso.ViewInteraction;
 import android.support.test.espresso.contrib.RecyclerViewActions;
 import android.support.test.rule.ActivityTestRule;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
 import android.view.View;
+import android.widget.GridView;
 
 
 import com.raystone.ray.goplaces.Login.LoginActivity;
@@ -26,6 +29,7 @@ import org.junit.Test;
 import static android.support.test.espresso.Espresso.onData;
 import static android.support.test.espresso.Espresso.onView;
 import static android.support.test.espresso.action.ViewActions.click;
+import static android.support.test.espresso.action.ViewActions.swipeLeft;
 import static android.support.test.espresso.action.ViewActions.typeText;
 import static android.support.test.espresso.assertion.ViewAssertions.matches;
 import static android.support.test.espresso.contrib.DrawerActions.open;
@@ -114,12 +118,48 @@ public class LoginUI {
         onView(withId(R.id.descrip)).check(matches(isDisplayed()));
     }
 
-    /*
+    @Test
+    public void showMomentsOnMap()
+    {
+        onView(withId(R.id.skip)).perform(click());
+        openDrawer(R.id.drawer_layout);
+        onView(withText("View Moments on Map")).perform(click());
+        onView(withId(R.id.previous_moment)).perform(click());
+    }
+
+    @Test
+    public void viewPicAndEdit()
+    {
+        onView(withId(R.id.skip)).perform(click());
+        openDrawer(R.id.drawer_layout);
+        onView(withText("View Moments List")).perform(click());
+        onView(withText("what")).perform(click());
+        onData(anything()).atPosition(0).perform(click());  //viewpager
+        onView(withId(R.id.viewpager)).perform(swipeLeft());
+        onView(withId(R.id.photo_bt_del)).perform(click());
+        onView(withId(R.id.photo_bt_enter)).perform(click());
+    }
+
+    @Test
+    public void viewPicInListMode()
+    {
+        onView(withId(R.id.skip)).perform(click());
+        openDrawer(R.id.drawer_layout);
+        onView(withText("View Moments List")).perform(click());
+        //onView(withId(R.id.place_item_pics))
+        onView(withId(R.id.place_recycle_view)).perform(RecyclerViewActions.actionOnItemAtPosition(4,clickOnChildViewWithId(R.id.place_item_pics)));
+        onView(withId(R.id.viewpager)).perform(swipeLeft());
+    }
+
+/*
     public class ViewMatchers
     {
         @SuppressWarnings("unchecked")
         public  Matcher<View> withRecyclerView(@IdRes int viewId)
-        {return allOf(isAssignableFrom(RecyclerView.class),withId(viewId));}
+        {
+            //return allOf(isAssignableFrom(RecyclerView.class),withId(viewId));
+            return onView(withId(R.id.place_recycle_view)).perform(RecyclerViewActions.scrollToPosition(4));
+        }
 
         @SuppressWarnings("unchecked")
         public ViewInteraction onRecyclerItemView(@IdRes int identifyingView, Matcher<View> identifyingMatcher, Matcher<View> childMatcher)
@@ -131,6 +171,35 @@ public class LoginUI {
         }
     }
     */
+
+    //  This is used to perform click on a specific view within a item from a RecyclerView
+    public ViewAction clickOnChildViewWithId(@IdRes final int resId)
+    {
+        return new ViewAction() {
+            @Override
+            public Matcher<View> getConstraints() {
+                return null;
+            }
+
+            @Override
+            public String getDescription() {
+                return null;
+            }
+
+            @Override
+            public void perform(UiController uiController, View view) {
+                View v = view.findViewById(resId);
+                if(v != null)
+                {
+                    if(v instanceof GridView)
+                        ((GridView) v).performItemClick(v,0,0);
+                    else
+                        v.performClick();
+                }
+            }
+        };
+    }
+
 
     public Matcher<View> withItemText(final String itemText)
     {
